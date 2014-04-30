@@ -28,7 +28,7 @@ rle rle_inst (
 .clk		(clk),
 .nreset		(nreset), 
 .start	(start[0]),
-.message_addr	(message_addr), 
+.message_addr	(message_addr),
 .message_size	(message_size), 
 .rle_addr	(rle_addr), 
 .rle_size	(rle_size),
@@ -67,7 +67,7 @@ begin
 // READ 100 BYTES FROM FILE  
 // MAKE SURE TO ENTER THE FULL LOCATION OF THE PLAINTEXT.DAT FILE ON YOUR PC
 // EX: C:/USERS/STUDENT/DOCUMENTS/PLAINTEXT.DAT
-	$readmemh("plaintext.dat", dpsram);
+	$readmemh("/home/andrei/Documents/ECE111/Project2/plaintext.dat", dpsram);
 
 // DISPLAY PLAINTEXT OF FRAME # 1 (48 BYTES)
 
