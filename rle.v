@@ -65,13 +65,11 @@ reg			wen_r;
 parameter IDLE    = 2'b00;
 parameter READ = 2'b01;
 parameter WRITE = 2'b01;
-parameter READWRITE = 2'b11;
+parameter COMPUTE = 2'b11;
 
 
 
 //increment the DPSRAM clock:
-//assign A_clk_n = ~A_clk_r;
-//assign port_A_clk = A_clk_r;
 assign port_A_clk = clk;
 
 //increment address to read;
@@ -82,7 +80,7 @@ assign port_A_addr = curr_read_addr_r;
 assign curr_read_data_n = port_A_data_out;
 
 //set wen:
-assign wen_n = (state == READ) ? 1'b0 : 1'b1;
+assign wen_n = (state == WRITE) ? 1'b1 : 1'b0;
 assign port_A_we = wen_r;
 
 
@@ -111,16 +109,16 @@ begin
 			end
 		READ:
 			begin
-				state <= READ;
+				state <= COMPUTE;
 				curr_read_addr_r <= curr_read_addr_n;
 			end
 		WRITE:
 			begin
 				state <= WRITE;
 			end
-		READWRITE:
+		COMPUTE:
 			begin
-				state <= READWRITE;
+				state <= COMPUTE;
 			end
 	  endcase
  end
