@@ -55,9 +55,8 @@ output	done; // done is a signal to indicate that encryption of the frame is com
 
 wire				A_clk_n;
 wire	[15:0]	curr_read_addr_n;
-wire 	[31:0]	curr_read_data_n;//, curr_byte_count_n, total_count_n;
+wire 	[31:0]	curr_read_data_n;
 wire				wen_n;
-//wire	[1:0]		state_n, compute_substate_n;
 
 reg	[1:0]		state, state_n, compute_substate, compute_substate_n;
 reg				A_clk_r;
@@ -90,8 +89,6 @@ assign curr_read_data_n = port_A_data_out;
 //set wen:
 assign wen_n = (state == WRITE) ? 1'b1 : 1'b0;
 assign port_A_we = wen_r;
-
-
 
 
 
@@ -159,7 +156,6 @@ begin
 		
 		//set next cycles read/write
 		wen_r <= wen_n;
-		
 		case (state)
 		IDLE:
 			begin
@@ -175,13 +171,15 @@ begin
 			end
 		READ:
 			begin
-				state <= COMPUTE;
+				state <= state_n; 
 				curr_read_addr_r <= curr_read_addr_n;
 			end
 		WRITE:
 			begin
 				state <= state_n;
 				curr_byte_count_r <= 0; //reset the byte count
+				//TODO: determine how to output done signal
+				// and how to write the data
 			end
 		COMPUTE:
 			begin
