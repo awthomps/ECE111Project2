@@ -53,47 +53,84 @@ output	[31:0] rle_size;
 output	done; // done is a signal to indicate that encryption of the frame is complete
 
 
-wire				A_clk_n;
-wire	[15:0]	curr_read_addr_n;
+wire	[15:0]	curr_read_addr_n, curr_write_addr_n;
 wire 	[31:0]	curr_read_data_n;
 wire				wen_n;
+wire	[1:0]		compute_substate_n;
+wire	[7:0]		curr_byte_n;
 
-reg	[1:0]		state, state_n, compute_substate, compute_substate_n;
-reg				A_clk_r;
-reg	[15:0]	curr_read_addr_r;
-reg	[31:0]	curr_read_data_r, curr_byte_count_r, total_count_r, curr_byte_count_n, total_count_n;
+reg	[1:0]		state, compute_substate;
+reg				write_substate;
+reg	[15:0]	curr_read_addr_r, curr_write_addr_r;
+reg	[31:0]	curr_read_data_r, curr_byte_count_r, total_count_r, curr_write_data_r;
 reg				wen_r;
 reg	[7:0]		curr_byte_r;
 
 parameter IDLE    = 2'b00;
 parameter READ = 2'b01;
-parameter WRITE = 2'b01;
+parameter WRITE = 2'b10;
 parameter COMPUTE = 2'b11;
 parameter C_STAGE_0 = 2'b00;
 parameter C_STAGE_1 = 2'b01;
-parameter C_STAGE_2 = 2'b01;
+parameter C_STAGE_2 = 2'b10;
 parameter C_STAGE_3 = 2'b11;
+parameter W_STAGE_0 = 1'b0;
+parameter W_STAGE_1 = 1'b1;
 
 
 
 //increment the DPSRAM clock:
 assign port_A_clk = clk;
 
-//increment address to read;
+//increment address to read:
 assign curr_read_addr_n = curr_read_addr_r + 4;
 assign port_A_addr = curr_read_addr_r;
+
+//increment address to write:
+assign curr_write_addr_n = (write_substate == W_STAGE_0) ? curr_write_addr_r + 4 : curr_write_addr_r;
+assign port_A_data_in = curr_write_data_r;
 
 //accept data:
 assign curr_read_data_n = port_A_data_out;
 
 //set wen:
-assign wen_n = (state == WRITE) ? 1'b1 : 1'b0;
+assign wen_n = (state == WRITE && write_substate == W_STAGE_1) ? 1'b1 : 1'b0;
 assign port_A_we = wen_r;
+assign done = (state == IDLE && total_count_r == message_size) ? 1'b1 : 1'b0;
+
+
+//CASE COMPUTE:
+//compute the next substate
+/*
+assign compute_substate_n = (state != COMPUTE) ? compute_substate :(
+									 (compute_substate_n == C_STAGE_0) ? ((curr_read_data_n[7:0] == curr_byte_r) ? C_STAGE_1 :
+									 (compute_substate_n == C_STAGE_1) ? ((curr_read_data_n[15:8] == curr_byte_r) ? C_STAGE_2 :
+									 (compute_substate_n == C_STAGE_2) ? ((curr_read_data_n[23:16] == curr_byte_r) ? C_STAGE_3 :
+																					  (curr_read_data_n[31:24] == curr_byte_r) ? C_STAGE_0 : compute_substate)))); //we are in stage 3
+																					  */
+assign curr_byte_n = (compute_substate == C_STAGE_0) ? curr_read_data_r[7:0] :
+							((compute_substate == C_STAGE_1) ? curr_read_data_r[15:8] : 
+							((compute_substate == C_STAGE_2) ? curr_read_data_r[23:16] : curr_read_data_r[31:24])); //C_STAGE_3
+assign compute_substate_n = ((state == COMPUTE) && (curr_byte_n == curr_byte_r) &&
+									 ((compute_substate == C_STAGE_0) || (compute_substate == C_STAGE_1) ||
+									 (compute_substate == C_STAGE_2) || (compute_substate == C_STAGE_3)
+									 )) ? (compute_substate + 1) % 4 : compute_substate;
+									 
+//assign total_count_n = (state != COMPUTE) ? total_count_r : (compute_substate != compute_substate);
+
+
+/*if(state != COMPUTE) begin
+	if(compute_substate == C_STAGE_0) begin
+		compute_substate_n = C_STAGE_1;
+	end
+
+end
+*/
+									 
 
 
 
-
-
+/*
 always@(*)
 begin
 
@@ -103,41 +140,48 @@ begin
 			case(compute_substate)
 				C_STAGE_0:
 				begin
-					compute_substate_n = (curr_read_data_n[7:0] == curr_byte_r) ? C_STAGE_0 : C_STAGE_1;
+					compute_substate_n = (curr_read_data_n[7:0] == curr_byte_r) ? C_STAGE_0 : C_STAGE_1;//
 				end
 				C_STAGE_1:
 				begin
-					compute_substate_n = (curr_read_data_n[15:8] == curr_byte_r) ? C_STAGE_1 : C_STAGE_2;
+					compute_substate_n = (curr_read_data_n[15:8] == curr_byte_r) ? C_STAGE_1 : C_STAGE_2;//
 				end
 				C_STAGE_2:
 				begin
-					compute_substate_n = (curr_read_data_n[23:16] == curr_byte_r) ? C_STAGE_2 : C_STAGE_3;
+					compute_substate_n = (curr_read_data_n[23:16] == curr_byte_r) ? C_STAGE_2 : C_STAGE_3;//
 				end
 				C_STAGE_3:
 				begin
-					compute_substate_n = (curr_read_data_n[31:24] == curr_byte_r) ? C_STAGE_3 : C_STAGE_0;
+					compute_substate_n = (curr_read_data_n[31:24] == curr_byte_r) ? C_STAGE_3 : C_STAGE_0;//
 				end
 			endcase
-			if(compute_substate_n != compute_substate) begin
-				state_n = (curr_byte_count_r == message_size) ? WRITE : COMPUTE;
-				curr_byte_count_n = 1 + curr_byte_count_r;
-				total_count_n = 1 + total_count_r;
+			if(compute_substate_n != compute_substate) begin//
+				state_n = (curr_byte_count_r == message_size) ? WRITE : COMPUTE;//
+				curr_byte_count_n = 1 + curr_byte_count_r;//
+				total_count_n = 1 + total_count_r;//
 			end
 			else begin
-				state_n = READ;
+				state_n = READ;//
 			end
 		end
 		READ:
 			begin
-				state_n = COMPUTE;
+				state_n = COMPUTE;//
 			end
 		WRITE:
 			begin
-				state_n = (total_count_r == message_size) ? IDLE : COMPUTE;
+				state_n = (total_count_r == message_size) ? IDLE : COMPUTE;//
+				write_substate_n = ~write_substate;//
+				if(write_substate == W_STAGE_0) begin//
+					curr_write_data_n = {16'b0, curr_byte_r, curr_byte_count_n};
+				end
+				else begin //write_substate == W_STAGE_1
+					curr_write_data_n[31:16] = {curr_byte_r, curr_byte_count_n};
+				end
 			end
 	endcase
 end
-
+*/
 
 
 always @(posedge clk or negedge nreset)
@@ -145,8 +189,10 @@ begin
 	if (!nreset) begin
 		state <= IDLE;
 		compute_substate <= C_STAGE_0;
-		//A_clk_r <= 1'b1;
+		write_substate <= W_STAGE_0;
 		curr_read_addr_r <= 16'b0;
+		curr_write_addr_r <= 16'b0;
+		curr_read_data_r <= 32'b0;
 		wen_r <= 1'b0;
 		curr_byte_r <= 8'b0;
 		curr_byte_count_r <= 32'b0;
@@ -163,7 +209,10 @@ begin
 					//initializations
 					state <= READ;
 					compute_substate <= C_STAGE_0;
+					write_substate <= W_STAGE_0;
 					curr_read_addr_r <= message_addr[15:0];
+					curr_write_addr_r <= rle_addr[15:0];
+					curr_read_data_r <= 32'b0;
 					curr_byte_r <= 8'b0;
 					curr_byte_count_r <= 32'b0;
 					total_count_r <= 32'b0;
@@ -171,22 +220,44 @@ begin
 			end
 		READ:
 			begin
-				state <= state_n; 
+				state <= COMPUTE; 
 				curr_read_addr_r <= curr_read_addr_n;
+				curr_read_data_r <= curr_read_data_n;
 			end
 		WRITE:
 			begin
-				state <= state_n;
 				curr_byte_count_r <= 0; //reset the byte count
 				//TODO: determine how to output done signal
 				// and how to write the data
+				
+				curr_write_addr_r <= curr_write_addr_n;
+				state <= (total_count_r == message_size) ? IDLE : COMPUTE;
+				write_substate <= ~write_substate;
+				curr_byte_r <= curr_byte_n; //wrote data for this byte so change the current byte
+				if(write_substate == W_STAGE_0) begin
+					curr_write_data_r <= {16'b0, curr_byte_r, curr_byte_count_r};
+				end
+				else begin
+					curr_write_data_r[31:16] <= {curr_byte_r, curr_byte_count_r};
+				end
 			end
 		COMPUTE:
 			begin
-				state <= state_n;
-				curr_byte_count_r <= curr_byte_count_n;
-				total_count_r <= total_count_n;
+				//state <= state_n;
+				//curr_byte_count_r <= curr_byte_count_n;
+				//total_count_r <= total_count_n;
+				
 				compute_substate <= compute_substate_n;
+				
+				//current count == input count or there is a new byte from byte string
+				if(total_count_r == message_size || compute_substate_n == compute_substate) begin
+					state <= WRITE;
+				end
+				else begin //current byte same as bye we are looking at
+					state <= ((compute_substate == C_STAGE_3) && (curr_read_data_r[31:24] == curr_byte_r)) ? READ : COMPUTE;
+					curr_byte_count_r <= curr_byte_count_r + 1;
+					total_count_r <= total_count_r + 1;
+				end
 			end
 	  endcase
  end
