@@ -55,7 +55,7 @@ output	done; // done is a signal to indicate that encryption of the frame is com
 
 wire	[15:0]	curr_read_addr_n, curr_write_addr_n;
 wire 	[31:0]	curr_read_data_n;
-wire				wen_n;
+wire				wen_n, next_stage_write;
 wire	[1:0]		compute_substate_n;
 wire	[7:0]		curr_byte_n;
 
@@ -97,7 +97,8 @@ assign rle_size = (write_substate == W_STAGE_1) ? (1 + num_writes) * 4 : num_wri
 assign curr_read_data_n = port_A_data_out;
 
 //set wen:
-assign wen_n = (state == WRITE && write_substate == W_STAGE_1) ? 1'b1 : 1'b0;
+assign next_stage_write = total_count_r == message_size || compute_substate_n == compute_substate;
+assign wen_n = (next_stage_write && write_substate == W_STAGE_1);//(state == WRITE && write_substate == W_STAGE_1) ? 1'b1 : 1'b0;
 assign port_A_we = wen_r;
 assign done = (state == IDLE && total_count_r == message_size) ? 1'b1 : 1'b0;
 
@@ -123,6 +124,7 @@ begin
 		curr_read_addr_r <= 16'b0;
 		curr_write_addr_r <= 16'b0;
 		curr_read_data_r <= 32'b0;
+		curr_write_data_r <= 32'b0;
 		wen_r <= 1'b0;
 		curr_byte_r <= 8'b0;
 		curr_byte_count_r <= 32'b0;
@@ -144,6 +146,7 @@ begin
 					curr_read_addr_r <= message_addr[15:0];
 					curr_write_addr_r <= rle_addr[15:0];
 					curr_read_data_r <= 32'b0;
+					curr_write_data_r <= 32'b0;
 					curr_byte_r <= 8'b0;
 					curr_byte_count_r <= 32'b0;
 					total_count_r <= 32'b0;
@@ -161,10 +164,11 @@ begin
 			//TODO: there is something wrong with the write 
 				curr_byte_count_r <= 0; //reset the byte count
 				
-				curr_write_addr_r <= curr_write_addr_n;
+				curr_write_addr_r <= curr_write_addr_n; //increment for next write address
 				state <= (total_count_r == message_size) ? IDLE : COMPUTE;
-				write_substate <= ~write_substate;
-				curr_byte_r <= curr_byte_n; //wrote data for this byte so change the current byte
+				
+				
+				/*
 				if(write_substate == W_STAGE_0) begin
 					curr_write_data_r <= {16'b0, curr_byte_r, curr_byte_count_r};
 				end
@@ -172,16 +176,27 @@ begin
 					curr_write_data_r[31:16] <= {curr_byte_r, curr_byte_count_r};
 					num_writes = num_writes + 1; //increment number of writes
 				end
+				*/
 			end
 		COMPUTE:
 			begin
 				compute_substate <= compute_substate_n;
 				
 				//current count == input count or there is a new byte from byte string
-				if(total_count_r == message_size || compute_substate_n == compute_substate) begin
-					state <= WRITE;
+				if(next_stage_write) begin
+					curr_byte_r <= curr_byte_n; //wrote data for this byte so change the current byte
+					write_substate <= ~write_substate; //change substate;
+					//set data to write on next cycle;
+					if(write_substate == W_STAGE_0) begin
+						curr_write_data_r <= {16'b0, curr_byte_r, curr_byte_count_r[7:0]};
+					end
+					else begin
+						curr_write_data_r[31:16] <= {curr_byte_r, curr_byte_count_r[7:0]};
+						num_writes = num_writes + 1; //increment number of writes
+						state <= WRITE;
+					end
 				end
-				else begin //current byte same as bye we are looking at
+				else begin //current byte same as byte we are looking at
 					state <= ((compute_substate == C_STAGE_3) && (curr_read_data_r[31:24] == curr_byte_r)) ? READ : COMPUTE;
 					curr_byte_count_r <= curr_byte_count_r + 1;
 					total_count_r <= total_count_r + 1;
