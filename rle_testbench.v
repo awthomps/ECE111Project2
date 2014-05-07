@@ -24,7 +24,7 @@ wire	done;
 
 
 
-rle rle_inst (
+rle_fast rle_inst (
 .clk		(clk),
 .nreset		(nreset), 
 .start	(start[0]),
