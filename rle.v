@@ -104,9 +104,9 @@ assign done = (state == IDLE && total_count_r == message_size) ? 1'b1 : 1'b0;
 
 
 //Compute combinational logic
-assign byte_n = (compute_substate == C_STAGE_0) ? read_data_r[7:0] :
-							((compute_substate == C_STAGE_1) ? read_data_r[15:8] : 
-							((compute_substate == C_STAGE_2) ? read_data_r[23:16] : read_data_r[31:24])); //C_STAGE_3
+assign byte_n = (compute_substate == C_STAGE_0) ? read_data_n[7:0] :
+							((compute_substate == C_STAGE_1) ? read_data_n[15:8] : 
+							((compute_substate == C_STAGE_2) ? read_data_n[23:16] : read_data_n[31:24])); //C_STAGE_3
 assign compute_substate_n = ((state == COMPUTE) && (byte_n == byte_r) &&
 									 ((compute_substate == C_STAGE_0) || (compute_substate == C_STAGE_1) ||
 									 (compute_substate == C_STAGE_2) || (compute_substate == C_STAGE_3)
@@ -140,12 +140,12 @@ begin
 			begin
 				if (start) begin
 					//initializations
-					state <= READ;
+					state <= COMPUTE;
 					compute_substate <= C_STAGE_0;
 					write_substate <= W_STAGE_0;
 					read_addr_r <= message_addr[15:0];
 					write_addr_r <= rle_addr[15:0];
-					read_data_r <= 32'b0;
+					read_data_r <= read_data_n; //read_data_r <= 32'b0;
 					write_data_r <= 32'b0;
 					byte_r <= 8'b0;
 					byte_count_r <= 32'b0;
@@ -197,7 +197,7 @@ begin
 					end
 				end
 				else begin //current byte same as byte we are looking at
-					state <= ((compute_substate == C_STAGE_3) && (read_data_r[31:24] == byte_r)) ? READ : COMPUTE;
+					state <= ((compute_substate == C_STAGE_3) && (read_data_n[31:24] == byte_r)) ? READ : COMPUTE;
 					byte_count_r <= byte_count_r + 1;
 					total_count_r <= total_count_r + 1;
 				end
