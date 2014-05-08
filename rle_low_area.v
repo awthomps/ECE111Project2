@@ -135,6 +135,10 @@ begin
 					post_read <= 1'b0;
 					
 				end
+				
+				if(wen == 1'b1) begin
+					wen <= 1'b0;
+				end
 			end
 			
 			READ: begin
@@ -154,6 +158,10 @@ begin
 			end
 			
 			COMPUTE: begin
+				if(wen) begin 
+					write_addr <= write_addr_n;
+					wen <= 1'b0;
+				end
 				if(post_read) begin
 					byte_str <= port_A_data_out; //get byte from read;
 					post_read <= 1'b0;
@@ -161,16 +169,19 @@ begin
 				else begin
 					if((byte != byte_str[7:0] && !first_flag ) || reached_length) begin
 						if(first_half) begin
-							state <= (reached_length) ? WRITE : COMPUTE;
+							//state <= (reached_length) ? WRITE : COMPUTE;
 							write_buffer <= {16'b0, byte, byte_count};
 							first_half <= 1'b0;
+							size_of_writes <= (reached_length) ? size_of_writes_n : size_of_writes;
 						end
 						else begin
-							state <= WRITE;
+							//state <= WRITE;
 							write_buffer[31:16] <= {byte, byte_count};
 							wen <= 1'b1;
 							first_half <= 1'b1;
+							size_of_writes <= size_of_writes_n;
 						end
+						state <= (reached_length) ? IDLE : COMPUTE;
 						byte <= byte_str[7:0];
 						byte_count <= 8'b0;
 					end
