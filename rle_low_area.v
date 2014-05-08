@@ -79,7 +79,7 @@ assign read_addr_n = read_addr + 4;
 //READ/WRITE;
 assign port_A_addr = (wen) ? write_addr : {9'b0, read_addr};
 assign port_A_clk = clk;
-assign done = (reached_length && state == IDLE); //reached_length and is idle
+assign done = (reached_length && !state); //reached_length and is idle
 
 //WRITE:
 assign port_A_we = wen;
@@ -91,7 +91,7 @@ assign rle_size = {25'b0, size_of_writes};
 //COMPUTE:
 assign byte_str_n = {8'b0,byte_str[31:8]};
 //assign shift_count_n = shift_count + 1;
-assign end_of_byte_str = total_count[1:0] == 2'b11;// (shift_count == 2'b11);
+assign end_of_byte_str = &total_count[1:0];// (shift_count == 2'b11);
 assign reached_length = total_count == message_size[7:0];
 assign byte_count_n = byte_count + 1;
 assign total_count_n = total_count + 1;
