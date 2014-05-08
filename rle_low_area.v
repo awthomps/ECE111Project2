@@ -177,14 +177,19 @@ begin
 					else begin //byte == byte_str[7:0];
 						//check if this is the first run:
 						if(first_flag) begin
-							state <= COMPUTE;
+							//state <= COMPUTE;
 							byte <= byte_str[7:0];
 							first_flag <= 1'b0;
 						end
 						else begin
-							state <= (end_of_byte_str) ? READ : COMPUTE;
+							//state <= (end_of_byte_str) ? READ : COMPUTE;
+							//state <= COMPUTE;
+							read_addr <= (end_of_byte_str) ? read_addr_n : read_addr; // increment read address
+							//byte_str <= port_A_data_out;
+							post_read <= end_of_byte_str;
 						end
 						//shift bytes
+						state <= COMPUTE;
 						byte_str <= byte_str_n;
 						//shift_count <= shift_count_n;
 						byte_count <= byte_count_n; //byte_count + 1;
