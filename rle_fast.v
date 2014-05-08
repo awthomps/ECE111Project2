@@ -54,7 +54,7 @@ output	done; // done is a signal to indicate that encryption of the frame is com
 
 
 parameter IDLE = 2'b00;
-parameter READ = 2'b01;
+parameter POSTIDLE_READ = 2'b01;
 parameter COMPUTE = 2'b10;
 
 
@@ -88,10 +88,10 @@ assign rle_size = size_of_writes;
 //COMPUTE:
 assign skip_byte_str = whole_str_same && !shift_count;
 assign byte_str_n = {8'b0,byte_str[31:8]};
-assign shift_count_n = (skip_byte_str) ? shift_count : shift_count + 1;
-assign end_of_byte_str = (shift_count == 2'b11);
-assign reached_length = total_count == message_size;
-assign whole_str_same = &(byte_str ^~ {byte_str[7:0], byte_str[7:0], byte_str[7:0], byte_str[7:0]});
+assign shift_count_n = (skip_byte_str) ? shift_count : shift_count + 1; // keep track of where the bytes have been shifted
+assign end_of_byte_str = (shift_count == 2'b11); // mark the end of the byte array to get new data
+assign reached_length = total_count == message_size; // length has been reached
+assign whole_str_same = &(byte_str ^~ {byte_str[7:0], byte_str[7:0], byte_str[7:0], byte_str[7:0]}); //check if all bytes are the same (optimization)
 assign byte_count_n = (skip_byte_str) ? (byte_count + 4) : (byte_count + 1);
 assign total_count_n = (skip_byte_str) ? (total_count + 4): (total_count + 1);
 
@@ -120,7 +120,7 @@ begin
 			IDLE: begin
 				if(start) begin
 					byte_str <= 32'b0;
-					state <= READ;
+					state <= POSTIDLE_READ;
 					read_addr <= message_addr[15:0];
 					write_addr <= rle_addr[15:0];
 					first_flag <= 1'b1;
@@ -139,44 +139,31 @@ begin
 				end
 			end
 			
-			READ: begin
+			POSTIDLE_READ: begin
 				state <= COMPUTE;
 				read_addr <= read_addr_n; // increment read address
-				//byte_str <= port_A_data_out;
 				post_read <= 1'b1;
 				
 			end
-			
-			/*
-			WRITE: begin
-				state <= (reached_length) ? IDLE : COMPUTE;
-				wen <= 1'b0;
-				write_addr <= write_addr_n; //increment write address
-				//write_buffer <= 32'b0; //clear buffer;
-			end
-			*/
-			
 			COMPUTE: begin
 				if(wen == 1'b1) begin
 					wen <= 1'b0;
-					//write_buffer <= 32'b0;
 					write_addr <= write_addr_n;
-					//size_of_writes <= size_of_writes_n;
 				end
 				if(post_read) begin
 					byte_str <= port_A_data_out; //get byte from read;
 					post_read <= 1'b0;
 				end
 				else begin
+					//check if we want to do any writing to memory:
 					if((byte != byte_str[7:0] && !first_flag ) || reached_length) begin
+						//check which half of they byte array buffer we want to set:
 						if(first_half) begin
-							//state <= (reached_length) ? WRITE : COMPUTE;
 							write_buffer <= {16'b0, byte, byte_count};
 							first_half <= 1'b0;
 							size_of_writes <= (reached_length) ? size_of_writes_n : size_of_writes;
 						end
 						else begin
-							//state <= WRITE;
 							write_buffer[31:16] <= {byte, byte_count};
 							wen <= 1'b1;
 							first_half <= 1'b1;
@@ -189,11 +176,16 @@ begin
 					else begin //byte == byte_str[7:0];
 						//check if this is the first run:
 						if(first_flag) begin
-							//state <= COMPUTE;
 							byte <= byte_str[7:0];
 							first_flag <= 1'b0;
 						end
-						state <= (reached_length) ? IDLE : ((end_of_byte_str || skip_byte_str) ? READ : COMPUTE);
+						
+						//check if we want to read or not:
+						read_addr <= (end_of_byte_str || skip_byte_str) ? read_addr_n : read_addr; // increment read address
+						post_read <= end_of_byte_str || skip_byte_str;
+							
+						state <= (reached_length) ? IDLE : COMPUTE;
+						
 						//shift bytes
 						byte_str <= byte_str_n;
 						shift_count <= shift_count_n;
