@@ -55,7 +55,7 @@ output	done; // done is a signal to indicate that encryption of the frame is com
 
 parameter IDLE = 2'b00;
 parameter POSTIDLE_READ = 2'b01;
-parameter COMPUTE = 2'b10;
+parameter COMPUTE = 2'b11;
 
 
 reg [31:0]	byte_str, write_buffer, total_count, size_of_writes;
