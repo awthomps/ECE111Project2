@@ -79,7 +79,7 @@ assign read_addr_n = read_addr + 4;
 //READ/WRITE;
 assign port_A_addr = (wen) ? write_addr : {9'b0, read_addr};
 assign port_A_clk = clk;
-assign done = (reached_length && !state); //reached_length and is idle
+assign done = (reached_length && !state&& !wen); //reached_length and is idle
 
 //WRITE:
 assign port_A_we = wen;
